@@ -1,0 +1,8 @@
+RFC-908
+RFC-1151 
+
+Reliable Delivery Protocol
+
+Step 1) Create structs for the packets? (read the rfc documents)
+Step 2) send and receive using SOCK_RAW
+Step 3) modify kernel (and socket call with new option?) to automatically accept RDP packets
