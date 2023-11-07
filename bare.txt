@@ -6,3 +6,8 @@ Reliable Delivery Protocol
 Step 1) Create structs for the packets? (read the rfc documents)
 Step 2) send and receive using SOCK_RAW
 Step 3) modify kernel (and socket call with new option?) to automatically accept RDP packets
+
+November 2023
+Current aim: have client send OPEN request and be acknowledge by server with SYN-SENT state, and on client side with SYN-RCVD.
+Client: has to send active Open request with specified port and network address. 
+    -> has to set SYN flag  

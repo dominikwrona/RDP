@@ -53,10 +53,7 @@ int main() {
 		//from the initial socket call is used.
     inet_pton(AF_INET, server_address, &address); 
     sockaddr.sin_addr = address;
-    /*status = connect(sock, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
-    if (status < -1) {
-	perror("Error connecting socket \n");
-    } THis sets destination address, not needed for raw server socket at the moment*/
+    //To-Do: implement a bind() that will open a local RDP port (in kernel implementation)
     readloop();
     //DO NOT HAVE TO BIND bc RAW SOCKET and will automatically match host IP
     return 0;
