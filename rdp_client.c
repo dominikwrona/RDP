@@ -13,6 +13,25 @@
 int soc;
 ssize_t res;
 
+/******************
+ * compute_checksum()
+ * Calcualtes the Internet (TCP) checksum, as described in RFC 1071
+*/
+uint16_t compute_checksum(void * pkt, ssize_t len) {
+    uint32_t sum = 0;
+    uint16_t *ptr = (uint16_t*) pkt;
+
+    while (len > 1) {
+      sum += *addr++;
+      len -= 2;
+   }
+   if (len > 0) //if there is an extra byte unaccounted for
+       sum += *(uint8_t *) addr;
+   //Fold 32-bit sum to 16 bits
+   while (sum>>16)
+       sum = (sum & 0xffff) + (sum >> 16);
+   return (uint16_t)(~sum); 
+}
 
 int main() {
    struct sockaddr_in daddr;
@@ -57,8 +76,9 @@ int main() {
     syn_packet.syn.sdm = 1; //deliver packets in order
     syn_packet.syn.options = 0;
 
-    //Calculate 16bit (TCP) checksum, as defined on page 16 of RFC-793
-
+    //Calculate 16bit (TCP) checksum, see RFC 1071
+    ssize_t len = sizeof(syn_pkt);
+    syn_packet.header.checksum = compute_checksum(&syn_pkt, len);
     //send to command
 
    return 0;
