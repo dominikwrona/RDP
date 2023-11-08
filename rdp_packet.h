@@ -1,5 +1,3 @@
-
-
 /***********************
 The Reliable Delivery Protocol Packet (Version 2)
 
@@ -32,6 +30,12 @@ struct rdp_flags {
     uint8_t unused:1;
     uint8_t version:2; //2 bit version number [with RFC 1151, guess we're at number 2]
 };
+typedef struct {
+    uint16_t max_segment_size; //The largest size, in octets, of a single segment (i.e. RDP packet) that should be sent (depends on receiver's buffers) 
+    uint16_t max_outstanding; //maximum num of segments that should be sent without getting an acknowledgement (reciever uses for flow control)
+    uint16_t sdm:1; //Sequenced Delivery Mode: specifies whether segments should be delivered in sequence (1 - accord. to seq. number) or in arrival order (0)
+    uint16_t options:15; //defined in RFC908 as two octets, even though only one bit currently in use, so keeping the other 15.
+} rdp_syn_t;
 
 struct rdp_header {
     struct rdp_flags flags;
@@ -46,5 +50,10 @@ struct rdp_header {
 
 typedef struct rdp_packet {
     struct rdp_header header;
-    char variable [];
+    char pdata [];
 } packet_t;
+
+typedef struct {
+    struct rdp_header header;
+    rdp_syn_t syn;
+} syn_packet_t;
