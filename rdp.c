@@ -15,9 +15,18 @@ struct sockaddr_in sockaddr;
 struct in_addr address;
 int sock;
 
+int verify_rdp_syn_packet() {}
+int verify_rdp_packet() {}
+int verify_packet(char * buffer, int len) {
+    if (len < sizeof(struct rdp_header))
+        return 0; //too small to be an RDP packet
+    struct rdp_header *header = (struct rdp_header *)buffer;
+    //to be continued - analayse the header for proper version number, header len, and other attributes
+}
+
 int readloop() {
     struct msghdr msg;
-    size_t size;
+    ssize_t size;
     struct sockaddr_in src_addr;
     socklen_t saddr_len;
     char buffer[MAX_PACKET_SIZE];
@@ -30,6 +39,7 @@ int readloop() {
           exit(EXIT_FAILURE);
        }
        printf("Received packet from %s with size %ld bytes \n", inet_ntoa(src_addr.sin_addr), size);  
+       verify_packet(&buffer, size);
     }
     return 0;
 }

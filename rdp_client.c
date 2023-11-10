@@ -6,12 +6,14 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <time.h>
 
 #include "rdp_packet.h"
 #define RDP_PROTOCOL 27
+#define MODULO_VALUE 2000000000 // 2 billion
 
 int soc;
-ssize_t res;
+int res;
 
 /******************
  * compute_checksum()
@@ -22,15 +24,23 @@ uint16_t compute_checksum(void * pkt, ssize_t len) {
     uint16_t *ptr = (uint16_t*) pkt;
 
     while (len > 1) {
-      sum += *addr++;
+      sum += *ptr++;
       len -= 2;
    }
    if (len > 0) //if there is an extra byte unaccounted for
-       sum += *(uint8_t *) addr;
+       sum += *(uint8_t *) ptr;
    //Fold 32-bit sum to 16 bits
    while (sum>>16)
        sum = (sum & 0xffff) + (sum >> 16);
    return (uint16_t)(~sum); 
+}
+
+uint32_t get_initial_sequence_num() {
+   struct timespec ts;
+   clock_gettime(CLOCK_MONOTONIC, &ts);  
+   unsigned long long time_combined = (unsigned long long)ts.tv_sec * 1000000000 + ts.tv_nsec;
+   unsigned int sequence_num = (unsigned int)(time_combined % MODULO_VALUE);
+   return (uint32_t) sequence_num;
 }
 
 int main() {
@@ -58,28 +68,31 @@ int main() {
    }
    //Now: send RDP SYN packet
    syn_packet_t syn_pkt;
-   memset(&syn_packet, 0, sizeof(syn_packet);
+   memset(&syn_pkt, 0, sizeof(syn_pkt));
 
    // Set RDP SYN flags and header fields
-    syn_packet.header.flags.syn = 1;
-    syn_packet.header.flags.version = 2;
-    syn_packet.header.header_len = sizeof(syn_packet.header);
-    syn_packet.header.src_port = htons(1234); // Source port
-    syn_packet.header.dst_port = htons(12345); // Destination port
-    syn_packet.header.datalen = htons(sizeof(rdp_syn_t)); // Length of SYN data
-    syn_packet.header.sequence_num = htonl(0); // Initial sequence number
-    syn_packet.header.ack_number = htonl(0); // Initial acknowledgment number
-    syn_packet.header.checksum = 0; //Computed when packet is sent I suppose, and then recomputed by receiver
+    syn_pkt.header.flags.syn = 1;
+    syn_pkt.header.flags.version = 2;
+    syn_pkt.header.header_len = sizeof(syn_pkt.header);
+    syn_pkt.header.src_port = htons(1234); // Source port
+    syn_pkt.header.dst_port = htons(12345); // Destination port
+    syn_pkt.header.datalen = htons(sizeof(rdp_syn_t)); // Length of SYN data
+    syn_pkt.header.sequence_num = htonl(get_initial_sequence_num()); // Initial sequence number
+    syn_pkt.header.ack_number = htonl(0); // Initial acknowledgment number
+    syn_pkt.header.checksum = 0; //Computed when packet is sent I suppose, and then recomputed by receiver
 
-    syn_packet.syn.max_segment_size = htons(65536);
-    syn_packet.syn_max_outstanding = htons(6);
-    syn_packet.syn.sdm = 1; //deliver packets in order
-    syn_packet.syn.options = 0;
+    syn_pkt.syn.max_segment_size = htons((uint16_t)65536);
+    syn_pkt.syn.max_outstanding = htons(6);
+    syn_pkt.syn.sdm = 1; //deliver packets in order
+    syn_pkt.syn.options = 0;
 
     //Calculate 16bit (TCP) checksum, see RFC 1071
     ssize_t len = sizeof(syn_pkt);
-    syn_packet.header.checksum = compute_checksum(&syn_pkt, len);
+    syn_pkt.header.checksum = compute_checksum(&syn_pkt, len);
     //send to command
-
+   res = sendto(soc, &syn_pkt, len, 0, (struct sockaddr *) &daddr, sizeof(daddr));
+   if (res < 0) {
+      perror("sendto socket failed: ");
+   } 
    return 0;
 }
