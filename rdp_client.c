@@ -76,7 +76,7 @@ int main() {
     syn_pkt.header.header_len = sizeof(syn_pkt.header);
     syn_pkt.header.src_port = htons(1234); // Source port
     syn_pkt.header.dst_port = htons(12345); // Destination port
-    syn_pkt.header.datalen = htons(sizeof(rdp_syn_t)); // Length of SYN data
+    syn_pkt.header.datalen = 0; //htons(sizeof(rdp_syn_t)); // 4.3.1 notes it's zero, as syn data is theoretically header data
     syn_pkt.header.sequence_num = htonl(get_initial_sequence_num()); // Initial sequence number
     syn_pkt.header.ack_number = htonl(0); // Initial acknowledgment number
     syn_pkt.header.checksum = 0; //Computed when packet is sent I suppose, and then recomputed by receiver
