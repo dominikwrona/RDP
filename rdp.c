@@ -20,6 +20,9 @@ int sock;
 struct connection_record connections[MAX_CONNS]; //temporary solution pending further study
 int hashtable_size = 4096;
 
+/**
+TO-DO: figure out how to manage/avoid collisions, or use 3rd party lib, or see how TCP does it
+**/
 struct hashtable_entry {
     unsigned long key; // hash of the connection details
     int array_index;   // Index of the connection in the connection record array
@@ -127,15 +130,15 @@ int readloop() {
             //prepare for syn packet (i.e. must be a new connection or an invalid one)
             //Step 1: fetch source address and source port from IP packet
             uint32_t source_ip = ntohl(src_addr.sin_addr.s_addr);
-            uint16_t sin_port = ntohs(src_addr.sin_port);
+            uint16_t sin_port = ntohs(src_addr.sin_port); //NOTE: should probably take this from RDP packet itself 
             //Step 2: fetch destination port from rdp_header
             struct rdp_header * rdp_hdr = (struct rdp_header *)rdp_data;
-            uint16_t dest_port = rdp_hdr->dst_port;
+            uint16_t dest_port = ntohs(rdp_hdr->dst_port);
             //Step 3: calculate_hash()
             int index = calculate_hash(source_ip, sin_port, dest_port);
             if (!connections[index].seg_seq) {
                 //No connection record exists: record new using syn packet or discard as corrupted
-                printf("No connection record exists; attempting to start one ... \n");
+                printf("No connection record exists; attempting to start one for source ip %u, sin_port %d, dest_port %d... \n", source_ip, sin_port, dest_port);
                 if (verify_rdp_syn_packet(rdp_data, size - ip_header_length)) {
                     //new connection requested (?)
                 }
