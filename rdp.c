@@ -5,16 +5,40 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include "rdp_packet.h"
 
 #define RDP_PROTOCOL 27
 #define MAX_PACKET_SIZE 65536 //in RDP this is to be determined dynamically (maximum segment size field in a SYN segment). TCP is 65536 (2^16)
 #define MIN_IP_HDR_LNGTH 20
+#define MAX_CONNS 4096 //maximum number of connections the server will simultaneously handle (reject connection if 4097th arrives?)
 
 struct sockaddr_in sockaddr;
 struct in_addr address;
 int sock;
+struct connection_record connections[MAX_CONNS]; //temporary solution pending further study
+int hashtable_size = 4096;
+
+struct hashtable_entry {
+    unsigned long key; // hash of the connection details
+    int array_index;   // Index of the connection in the connection record array
+};
+int calculate_hash(uint32_t src_address, uint16_t src_port, uint16_t dst_port) { //for the time being
+    unsigned long hash = 0;
+
+    // Mix src_address
+    hash += (src_address >> 24) & 0xFF;
+    hash += (src_address >> 16) & 0xFF;
+    hash += (src_address >> 8) & 0xFF;
+    hash += src_address & 0xFF;
+
+    // Mix src_port and dst_port
+    hash = hash * 31 + src_port;
+    hash = hash * 31 + dst_port;
+
+    return (int) hash % 4096; //4096 entries in hash table
+}
 
 int verify_rdp_syn_packet(char *rdp_data, int size) {
     return 0;
@@ -62,7 +86,7 @@ int verify_packet(char * buffer, int len) {
 int readloop() {
     //struct msghdr msg;
     ssize_t size;
-    struct sockaddr_in src_addr;
+    struct sockaddr_in src_addr; //NOTE: sockaddr_in is the struct for IPv4, sockaddr_in6 is equivalent for IPv6
     socklen_t saddr_len = sizeof(src_addr);
     char buffer[MAX_PACKET_SIZE];
 
@@ -97,15 +121,26 @@ int readloop() {
 
         char *rdp_data = buffer + ip_header_length;
         if (verify_packet(rdp_data, size - ip_header_length)) {
-           //decode packet -> step 1 verify if rdp syn packet or normal packet 
-           printf("RDP packet detected! \n");
-           //TO-DO: Check if source address + source port + destination address + destination port is in Connection record, if not then
-           //prepare for syn packet (i.e. must be a new connection or an invalid one)
-           //
-           //
-           if (verify_rdp_syn_packet(rdp_data, size - ip_header_length)) {
-               //new connection requested (?)
-           }
+            //decode packet -> step 1 verify if rdp syn packet or normal packet 
+            printf("RDP packet detected! \n");
+            //TO-DO: Check if source address + source port + destination address + destination port is in Connection record, if not then
+            //prepare for syn packet (i.e. must be a new connection or an invalid one)
+            //Step 1: fetch source address and source port from IP packet
+            uint32_t source_ip = ntohl(src_addr.sin_addr.s_addr);
+            uint16_t sin_port = ntohs(src_addr.sin_port);
+            //Step 2: fetch destination port from rdp_header
+            struct rdp_header * rdp_hdr = (struct rdp_header *)rdp_data;
+            uint16_t dest_port = rdp_hdr->dst_port;
+            //Step 3: calculate_hash()
+            int index = calculate_hash(source_ip, sin_port, dest_port);
+            if (!connections[index].seg_seq) {
+                //No connection record exists: record new using syn packet or discard as corrupted
+                printf("No connection record exists; attempting to start one ... \n");
+                if (verify_rdp_syn_packet(rdp_data, size - ip_header_length)) {
+                    //new connection requested (?)
+                }
+            }
+           
        }
        else {
         printf("packet is not an RDP packet \n");
@@ -124,7 +159,7 @@ TO-DO: see rfc908 3.2.4 -> CONNECTION RECORD
 each connection should have a record that may contain the following info:
 State: OPEN, LISTEN, CLOSED, SYN-SENT, SYN-RCVD, CLOSE_WAIT (see 3.2.3)
 Send Sequence Number variables: SND.NEXT -> sequence number of next segment
-                    SND.UNA -> The sequence number of the oldest unacknowledge segment
+                    SND.UNA -> The sequence number of the oldest unacknowledged segment
                     SND.MAX -> maximum number of outstanding (unacknowledged) segments
                     SND.ISS -> initial send sequence number
 Receive Sequence Number variables: RCV.CUR -> sequence number of last segment received correctly and in sequence
@@ -156,6 +191,7 @@ int main() {
     inet_pton(AF_INET, server_address, &address);
     sockaddr.sin_addr = address;
     //To-Do: implement a bind() that will open a local RDP port (in kernel implementation)
+    memset(connections, 0, sizeof(connections));
     readloop();
     //DO NOT HAVE TO BIND bc RAW SOCKET and will automatically match host IP
     return 0;
