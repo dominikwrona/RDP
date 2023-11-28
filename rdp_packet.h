@@ -69,22 +69,20 @@ struct connection_record {
     uint16_t src_port;
     uint16_t dst_port;
     unsigned char state; //one of 6, see above
-    union {
-        struct {
-            uint32_t snd_nxt; //sequence number of next segment
-            uint32_t snd_una; //The sequence number of the oldest unacknowledged segment
-            uint32_t snd_max; //maximum number of outstanding (unacknowledged) segments
-            uint32_t snd_iss; //initial send sequence number
-        };
-        struct {
-            uint32_t rcv_cur; //sequence number of last segment received correctly and in sequence
-            uint32_t rcv_max; //max number of segments that can be buffered for this connection
-            uint32_t rcv_irs; //initial received segment
-            uint32_t *rcv_iss; //pointer to array of sequence numbers of segments received out of order
-        };
-    };
+    
+    //used to be a union of two struct but decided the variables are important.
+    uint32_t snd_nxt; //sequence number of next segment
+    uint32_t snd_una; //The sequence number of the oldest unacknowledged segment
+    uint32_t snd_max; //maximum number of outstanding (unacknowledged) segments
+    uint32_t snd_iss; //initial send sequence number
+    
+    uint32_t rcv_cur; //sequence number of last segment received correctly and in sequence
+    uint32_t rcv_max; //max number of segments that can be buffered for this connection
+    uint32_t rcv_irs; //initial received segment
+    uint32_t *rcv_iss; //pointer to array of sequence numbers of segments received out of order
+    
     uint32_t seg_seq; //sequence number of segment currently being processed
     uint32_t seg_ack; //ack seq number of segment currently being processed
-    uint32_t seg_max; //max number of outstanding segments receiver willing to hold (? - not sure how this fits in for now)
+    uint32_t seg_qmax; //max number  (quantity) of outstanding segments receiver willing to hold (i.e. perhaps 0 means no out-of-sequence segments will be accepted)
     uint32_t seg_bmax; //max segment size (in octets/bytes) accepted by foreign host in this connection 
 };

@@ -11,13 +11,15 @@
 
 #define RDP_PROTOCOL 27
 #define MAX_PACKET_SIZE 65536 //in RDP this is to be determined dynamically (maximum segment size field in a SYN segment). TCP is 65536 (2^16)
+#define MAX_SEGMENT_SIZE 1400 //to be safe; use Path MTU Discovery to determine correct size and store in connection record. 
 #define MIN_IP_HDR_LNGTH 20
 #define MAX_CONNS 4096 //maximum number of connections the server will simultaneously handle (reject connection if 4097th arrives?)
+#define MAX_SEGMENT_SIZE
 
 struct sockaddr_in sockaddr;
 struct in_addr address;
 int sock;
-struct connection_record connections[MAX_CONNS]; //temporary solution pending further study
+struct connection_record * connections[MAX_CONNS]; //temporary solution pending further study
 int hashtable_size = 4096;
 
 /**
@@ -27,6 +29,7 @@ struct hashtable_entry {
     unsigned long key; // hash of the connection details
     int array_index;   // Index of the connection in the connection record array
 };
+
 int calculate_hash(uint32_t src_address, uint16_t src_port, uint16_t dst_port) { //for the time being
     unsigned long hash = 0;
 
@@ -43,8 +46,13 @@ int calculate_hash(uint32_t src_address, uint16_t src_port, uint16_t dst_port) {
     return (int) hash % 4096; //4096 entries in hash table
 }
 
-int verify_rdp_syn_packet(char *rdp_data, int size) {
-    return 0;
+int verify_rdp_syn_packet(syn_packet_t * syn_pkt, int size) {
+    //verify syn flag is set and datalen = 0; 
+    if (!syn_pkt->header.flags.syn || syn_pkt->header.datalen)
+        return 0;
+    if (size < (sizeof(struct rdp_header) + (sizeof(rdp_syn_t)))) //cannot check for raw equality as different compilers might add different paddings
+        return 0;
+    return 1;
 };
 
 int verify_checksum(char * buffer, int len) {
@@ -136,12 +144,30 @@ int readloop() {
             uint16_t dest_port = ntohs(rdp_hdr->dst_port);
             //Step 3: calculate_hash()
             int index = calculate_hash(source_ip, sin_port, dest_port);
-            if (!connections[index].seg_seq) {
+            if (connections[index] == NULL) {
                 //No connection record exists: record new using syn packet or discard as corrupted
                 printf("No connection record exists; attempting to start one for source ip %u, sin_port %d, dest_port %d... \n", source_ip, sin_port, dest_port);
-                if (verify_rdp_syn_packet(rdp_data, size - ip_header_length)) {
-                    //new connection requested (?)
+                if (verify_rdp_syn_packet((syn_packet_t *) rdp_data, size - ip_header_length)) {
+                    //create new connection record
+                    connection[index] = malloc(sizeof(struct connection_record));
+                    if (!connection[index]) {
+                        perror("malloc for connection record failed \n"); continue; }
+                    memset(connection[index], 0, sizeof(struct connection_record)); 
+                    syn_packet_t * syn_pkt = (syn_packet_t *)rdp_data;
+                    connections[index]->src_address = source_ip;
+                    connections[index]->src_port = sin_port;
+                    connections[index]->dst_port = dest_port;
+                    connections[index]->state = LISTEN;
+                    connections[index]->snd_iss = syn_pkt->header.sequence_num;
+                    /* ....  */ 
+
                 }
+                else {
+                    //don't create - ignore/error message/continue
+                }
+            }
+            else {
+                //connection record exists - continue operations with existing connection record
             }
            
        }
@@ -200,3 +226,13 @@ int main() {
     return 0;
 
 }
+
+/*******************
+ * Current more macro-level To-Dos:
+ * Hash Table collision management
+ * Path MTU Discovery for effective MTU and thus MSS calculation (this may require cooperation with kernel)
+ * 
+ * 
+ * 
+ * 
+*/
