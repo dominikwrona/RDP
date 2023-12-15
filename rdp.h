@@ -1,6 +1,6 @@
 #include <time.h>
 #include <string.h>
-
+#define MODULO_VALUE 2000000000 // 2 billion
 
 
 uint32_t get_initial_sequence_num() {
