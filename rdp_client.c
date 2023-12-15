@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include "rdp_packet.h"
+#include "rdp.h"
 #define RDP_PROTOCOL 27
 #define MODULO_VALUE 2000000000 // 2 billion
 
@@ -35,13 +36,13 @@ uint16_t compute_checksum(void * pkt, ssize_t len) {
    return (uint16_t)(~sum); 
 }
 
-uint32_t get_initial_sequence_num() {
+/*uint32_t get_initial_sequence_num() {  //moved to rdp.h
    struct timespec ts;
    clock_gettime(CLOCK_MONOTONIC, &ts);  
    unsigned long long time_combined = (unsigned long long)ts.tv_sec * 1000000000 + ts.tv_nsec;
    unsigned int sequence_num = (unsigned int)(time_combined % MODULO_VALUE);
    return (uint32_t) sequence_num;
-}
+}*/
 
 int main() {
    struct sockaddr_in daddr;

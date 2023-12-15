@@ -57,6 +57,25 @@ typedef struct {
     rdp_syn_t syn;
 } syn_packet_t;
 
+/*TO-DO: see rfc908 3.2.4 -> CONNECTION RECORD 
+each connection should have a record that may contain the following info:
+State: OPEN, LISTEN, CLOSED, SYN-SENT, SYN-RCVD, CLOSE_WAIT (see 3.2.3)
+Send Sequence Number variables: SND.NEXT -> sequence number of next segment
+                    SND.UNA -> The sequence number of the oldest unacknowledged segment
+                    SND.MAX -> maximum number of outstanding (unacknowledged) segments
+                    SND.ISS -> initial send sequence number
+Receive Sequence Number variables: RCV.CUR -> sequence number of last segment received correctly and in sequence
+                    RCV.MAX -> maximum number of segments that can be buffered for this connection
+                    RCV.IRS -> initial receive sequence number
+                    RCVDSEQNO[n] -> the array of sequence numbers of segments that have been received and acknowledged out of sequence
+CLOSEWAIT - timer for closing the CLOSE-WAIT state
+SBUF.MAX - largest possible segment (in octets) that can legally be sent (established in initial SYN packets)
+RBUF.MAX - largest possible segment that can be received
+Variables from Current Segment: SEG.SEQ -> sequence number of the sequence currently being processed
+                    SEG.ACK -> acknowledgement sequence number in the segment currently being processed
+                    SEG.MAX -> max number of outstanding segments receive is willing to hold
+                    SEG.BMAX -> max segment size (in octets/bytes) accepted by foreign host on connection */
+
 #define CLOSED 0
 #define OPEN 1
 #define LISTEN 2

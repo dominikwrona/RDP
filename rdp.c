@@ -11,7 +11,7 @@
 
 #define RDP_PROTOCOL 27
 #define MAX_PACKET_SIZE 65536 //in RDP this is to be determined dynamically (maximum segment size field in a SYN segment). TCP is 65536 (2^16)
-#define MAX_SEGMENT_SIZE 1400 //to be safe; use Path MTU Discovery to determine correct size and store in connection record. 
+#define MAX_SEGMENT_SIZE 1400 //to be safe; more generally use Path MTU Discovery to determine correct size and store in connection record. 
 #define MIN_IP_HDR_LNGTH 20
 #define MAX_CONNS 4096 //maximum number of connections the server will simultaneously handle (reject connection if 4097th arrives?)
 #define MAX_SEGMENT_SIZE
@@ -93,6 +93,10 @@ int verify_packet(char * buffer, int len) {
     }
     return 1;
 }
+int send_syn_ack(uint32_t iss, uint32_t rcv_iss, uint32_t dest_ip, uint16_t dest_port) {
+    syn_packet_t syn_ack_pkt;
+
+}
 
 int readloop() {
     //struct msghdr msg;
@@ -157,9 +161,13 @@ int readloop() {
                     connections[index]->src_address = source_ip;
                     connections[index]->src_port = sin_port;
                     connections[index]->dst_port = dest_port;
-                    connections[index]->state = LISTEN;
-                    connections[index]->snd_iss = syn_pkt->header.sequence_num;
+                    connections[index]->state = SYN_RCVD; //a 'LISTEN' state would have to cooperate with kernel ports
+                    connections[index]->rcv_irs = syn_pkt->header.sequence_num;
+                    uint32_t iss = get_initial_sequence_num();
+                    connections[index]->send_iss = iss;
                     /* ....  */ 
+                    /*create receiver's initial sequence number and Send SYN acknowledgement back to sender*/
+                    send_syn_ack(iss, syn_pkt->header.sequence_num, source_ip, dest_port);
 
                 }
                 else {
@@ -183,25 +191,6 @@ netstat -aenp: shows every active connection with both local address and foreign
 RAW Socket: does not use a port number, kernel automatically routs all non-TCP, non-UDP packets with socket's protocol number to that socket
 The provisory implementation until kernel modifications can be made. If works correctly can then transfer it to kernel so that socket(), connect(),
 bind() calls all work fluently with RDP SOCK_STREAM
-
-TO-DO: see rfc908 3.2.4 -> CONNECTION RECORD 
-each connection should have a record that may contain the following info:
-State: OPEN, LISTEN, CLOSED, SYN-SENT, SYN-RCVD, CLOSE_WAIT (see 3.2.3)
-Send Sequence Number variables: SND.NEXT -> sequence number of next segment
-                    SND.UNA -> The sequence number of the oldest unacknowledged segment
-                    SND.MAX -> maximum number of outstanding (unacknowledged) segments
-                    SND.ISS -> initial send sequence number
-Receive Sequence Number variables: RCV.CUR -> sequence number of last segment received correctly and in sequence
-                    RCV.MAX -> maximum number of segments that can be buffered for this connection
-                    RCV.IRS -> initial receive sequence number
-                    RCVDSEQNO[n] -> the array of sequence numbers of segments that have been received and acknowledged out of sequence
-CLOSEWAIT - timer for closing the CLOSE-WAIT state
-SBUF.MAX - largest possible segment (in octets) that can legally be sent (established in initial SYN packets)
-RBUF.MAX - largest possible segment that can be received
-Variables from Current Segment: SEG.SEQ -> sequence number of the sequence currently being processed
-                    SEG.ACK -> acknowledgement sequence number in the segment currently being processed
-                    SEG.MAX -> max number of outstanding segments receive is willing to hold
-                    SEG.BMAX -> max segment size (in octets/bytes) accepted by foreign host on connection
 
 TO-DO: Close connections 3.2.5: close request from user results in RST segment sent to other side of connection
                           RST segment from other side results in connection closed on this side.
