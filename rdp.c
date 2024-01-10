@@ -8,13 +8,13 @@
 #include <string.h>
 #include <errno.h>
 #include "rdp_packet.h"
+#include "rdp.h"
 
 #define RDP_PROTOCOL 27
-#define MAX_PACKET_SIZE 65536 //in RDP this is to be determined dynamically (maximum segment size field in a SYN segment). TCP is 65536 (2^16)
 #define MAX_SEGMENT_SIZE 1400 //to be safe; more generally use Path MTU Discovery to determine correct size and store in connection record. 
 #define MIN_IP_HDR_LNGTH 20
 #define MAX_CONNS 4096 //maximum number of connections the server will simultaneously handle (reject connection if 4097th arrives?)
-#define MAX_SEGMENT_SIZE
+//#define MAX_SEGMENT_SIZE
 
 struct sockaddr_in sockaddr;
 struct in_addr address;
@@ -93,13 +93,38 @@ int verify_packet(char * buffer, int len) {
     }
     return 1;
 }
-int send_syn_ack(uint32_t iss, uint32_t rcv_iss, uint32_t dest_ip, uint16_t dest_port) {
+int send_syn_ack(uint32_t iss, uint32_t rcv_iss, struct sockaddr_in dest_addr, uint16_t dest_port) {
+    int res; 
     syn_packet_t syn_ack_pkt;
+    syn_ack_pkt.header.flags.syn = 1;
+    syn_ack_pkt.header.flags.ack = 1;
+    syn_ack_pkt.header.header_len = sizeof(syn_ack_pkt.header);
+    syn_ack_pkt.header.src_port = htons(1234); // Source port, just a placer value
+    syn_ack_pkt.header.dst_port = htons(dest_port); // Destination port
+    
+    syn_ack_pkt.header.datalen = 0;
+    syn_ack_pkt.header.ack_number = rcv_iss;
+    syn_ack_pkt.header.sequence_num = iss;
+    syn_ack_pkt.header.checksum = 0;
 
+    syn_ack_pkt.syn.max_segment_size = htons((uint16_t)65536);
+    syn_ack_pkt.syn.max_outstanding = htons(6);
+    syn_ack_pkt.syn.sdm = 1; //deliver packets in order
+    syn_ack_pkt.syn.options = 0;
+    //Calculate 16bit (TCP) checksum, see RFC 1071
+    ssize_t len = sizeof(syn_ack_pkt);
+    syn_ack_pkt.header.checksum = compute_checksum(&syn_ack_pkt, len);
+    //send to command
+    res = sendto(sock, &syn_ack_pkt, len, 0, (struct sockaddr *) &dest_addr, sizeof(dest_addr));
+    if (res < 0) {
+        perror("sendto socket failed: ");
+        return -1;
+    }
+    return 0;
 }
 
 int readloop() {
-    //struct msghdr msg;
+    //struct msghdr msg; 
     ssize_t size;
     struct sockaddr_in src_addr; //NOTE: sockaddr_in is the struct for IPv4, sockaddr_in6 is equivalent for IPv6
     socklen_t saddr_len = sizeof(src_addr);
@@ -132,7 +157,7 @@ int readloop() {
         if (size < ip_header_length + sizeof(struct rdp_header)) {
             printf("Packet too small to be RDP, IP header length: %d \n", ip_header_length);
             continue;
-        }
+        }  
 
         char *rdp_data = buffer + ip_header_length;
         if (verify_packet(rdp_data, size - ip_header_length)) {
@@ -153,10 +178,10 @@ int readloop() {
                 printf("No connection record exists; attempting to start one for source ip %u, sin_port %d, dest_port %d... \n", source_ip, sin_port, dest_port);
                 if (verify_rdp_syn_packet((syn_packet_t *) rdp_data, size - ip_header_length)) {
                     //create new connection record
-                    connection[index] = malloc(sizeof(struct connection_record));
-                    if (!connection[index]) {
+                    connections[index] = malloc(sizeof(struct connection_record));
+                    if (!connections[index]) {
                         perror("malloc for connection record failed \n"); continue; }
-                    memset(connection[index], 0, sizeof(struct connection_record)); 
+                    memset(connections[index], 0, sizeof(struct connection_record)); 
                     syn_packet_t * syn_pkt = (syn_packet_t *)rdp_data;
                     connections[index]->src_address = source_ip;
                     connections[index]->src_port = sin_port;
@@ -164,10 +189,10 @@ int readloop() {
                     connections[index]->state = SYN_RCVD; //a 'LISTEN' state would have to cooperate with kernel ports
                     connections[index]->rcv_irs = syn_pkt->header.sequence_num;
                     uint32_t iss = get_initial_sequence_num();
-                    connections[index]->send_iss = iss;
+                    connections[index]->snd_iss = iss;
                     /* ....  */ 
                     /*create receiver's initial sequence number and Send SYN acknowledgement back to sender*/
-                    send_syn_ack(iss, syn_pkt->header.sequence_num, source_ip, dest_port);
+                    send_syn_ack(iss, syn_pkt->header.sequence_num, src_addr, dest_port);
 
                 }
                 else {

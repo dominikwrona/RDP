@@ -19,8 +19,9 @@ int res;
 /******************
  * compute_checksum()
  * Calcualtes the Internet (TCP) checksum, as described in RFC 1071
+ * MOVED TO HEADER FILE
 */
-uint16_t compute_checksum(void * pkt, ssize_t len) {
+/*uint16_t compute_checksum(void * pkt, ssize_t len) {
     uint32_t sum = 0;
     uint16_t *ptr = (uint16_t*) pkt;
 
@@ -34,7 +35,7 @@ uint16_t compute_checksum(void * pkt, ssize_t len) {
    while (sum>>16)
        sum = (sum & 0xffff) + (sum >> 16);
    return (uint16_t)(~sum); 
-}
+}*/
 
 /*uint32_t get_initial_sequence_num() {  //moved to rdp.h
    struct timespec ts;
@@ -46,8 +47,11 @@ uint16_t compute_checksum(void * pkt, ssize_t len) {
 
 int main() {
    struct sockaddr_in daddr;
+   struct sockaddr_in raddr; //the address received from the server
+   socklen_t raddr_len = sizeof(raddr);
    struct in_addr address;
    char * server_address = "127.0.0.0"; 
+   ssize_t size; char buffer[MAX_PACKET_SIZE];
    soc = socket(AF_INET, SOCK_RAW, RDP_PROTOCOL);
    if (soc < 0) {
       perror("Error creating socket:");
@@ -95,5 +99,7 @@ int main() {
    if (res < 0) {
       perror("sendto socket failed: ");
    } 
+   size = recvfrom(soc, buffer, MAX_PACKET_SIZE, 0, (struct sockaddr *) &raddr, &raddr_len);
+   printf("received something \n");
    return 0;
 }
